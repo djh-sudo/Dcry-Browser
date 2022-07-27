@@ -83,6 +83,7 @@ def CS64_Reversible(Src: bytes, iChNum, Md5: list) -> (bool, bytes):
         dwTemp00 = dwRet0
         if i < iChNum:
             dwTemp00 += int.from_bytes(Src[i * 4:(i + 1) * 4], byteorder='little')
+            dwTemp00 &= DWORD
         dwTemp01 = (dwMD50 * dwTemp00) & DWORD
         dwTemp02 = _ZOO1(dwTemp01, 0xB1110000, 0x30674EEF)
         dwTemp03 = _ZOO1(dwTemp02, 0x5B9F0000, 0x78F7A461)
