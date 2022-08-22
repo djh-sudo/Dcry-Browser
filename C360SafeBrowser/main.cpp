@@ -1,6 +1,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 #include "C360.h"
 
 
@@ -26,22 +27,17 @@ using namespace std;
 	fread(buffer.get(), dwSize, 1, fp);
 	SafeBrowserBookMark::Get360BookMark(buffer.get(), dwSize, (LPWSTR)L"C:/11.txt", sid, guid);
 *
+* testing demo 3
+* 
+    vector<Wrapper>res;
+	SafeBrowserAutoSave::GetInfoFromSQL((LPWSTR)L"C:/Users/Administrator/AppData/Roaming/360se6/User Data/Default/apps/LoginAssis/assis2.db", guid, res);
+* 
 */
 int main() {
 
 	string sid = SafeBrowserBookMark::GetUserSID();
 	string guid = SafeBrowserBookMark::GetMachineGuid();
-
-	FILE* fp = fopen("C:/Users/Administrator/AppData/Roaming/360se6/User Data/Default/360Bookmarks", "rb");
-	if (fp == NULL) {
-		return -1;
-	}
-	fseek(fp, 0, SEEK_END);
-	DWORD dwSize = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
-	std::unique_ptr<char[]>buffer(new char[dwSize]);
-	fread(buffer.get(), dwSize, 1, fp);
-	SafeBrowserBookMark::Get360BookMark(buffer.get(), dwSize, (LPWSTR)L"C:/11.txt", sid, guid);
-
+	vector<Wrapper>res;
+	SafeBrowserAutoSave::GetInfoFromSQL((LPWSTR)L"C:/Users/Administrator/AppData/Roaming/360se6/User Data/Default/apps/LoginAssis/assis2.db", guid, res);
 	return 0;
 }

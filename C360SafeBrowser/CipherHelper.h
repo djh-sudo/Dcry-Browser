@@ -15,10 +15,6 @@
 #pragma comment(lib, "libcrypto.lib")
 
 
-#ifndef SQLITE_HAS_CODEC
-#define SQLITE_HAS_CODEC
-#endif
-
 class SSLHelper{
 public:
 
