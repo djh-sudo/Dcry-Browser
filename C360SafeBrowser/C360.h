@@ -246,7 +246,7 @@ public:
 		return true;
 	}
 
-	SafeBrowserBookMark() {
+	explicit SafeBrowserBookMark() noexcept {
 		m_hFile = INVALID_HANDLE_VALUE;
 		m_memoryBuffer = NULL;
 		m_dwMemoryBuffer = 0;
@@ -579,9 +579,9 @@ private:
 */
 class Wrapper {
 public:
-	Wrapper() {}
+	explicit Wrapper() noexcept {}
 
-	Wrapper(std::string domain, std::string account, std::string enc_password){
+	explicit Wrapper(std::string domain, std::string account, std::string enc_password) noexcept {
 		this->m_domain = domain;
 		this->m_account = account;
 		this->enc_password = enc_password;
@@ -598,7 +598,7 @@ class SafeBrowserAutoSave {
 
 public:
 	
-	bool Init(LPWSTR dbfilePath, std::string guid, std::vector<Wrapper>& res) {
+	bool Init(LPWSTR dbfilePath, std::string guid, std::vector<Wrapper>& res) noexcept  {
 		if (dbfilePath == NULL) {
 			return false;
 		}
@@ -636,7 +636,7 @@ public:
 		 return status == SQLITE_OK;
 	}
 	
-	void Uint() {
+	void Uint() noexcept {
 		m_dbPath = L"";
 		m_guid = "";
 	}
@@ -647,7 +647,7 @@ public:
 		autoSave.Uint();
 	}
 
-	SafeBrowserAutoSave() = default;
+	explicit SafeBrowserAutoSave() = default;
 	
 	~SafeBrowserAutoSave() {
 		Uint();
