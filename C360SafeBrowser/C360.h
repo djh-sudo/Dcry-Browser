@@ -3,7 +3,11 @@
 * 360 safe browser bookmark decrypt!
 * user data stored at
 * C:/Users/%username%/AppData/Roaming/360se6/User Data/Default/360Bookmarks
-* browser version: 13.1.6140.0
+* browser version: 10.0.1840.0 - 13.1.6140.0
+* Also See
+* http://www.liulanqicode.com/360bookmarks.htm
+* https://www.cnblogs.com/DirWang/p/16464120.html
+* https://www.cnblogs.com/DirWang/p/16608968.html
 */
 
 #include <memory>
@@ -118,6 +122,85 @@ public:
 		return status;
 	}
 
+	static std::string GetKey(std::string usid, std::string guid) {
+		std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+		// step 1 padding stub
+		DWORD stub_len = sizeof(stub);
+		// step 2 concatenate payload one
+		BYTE payload_one[512] = { 0 };
+		memcpy(payload_one, stub, stub_len);
+
+		DWORD offset = stub_len;
+		DWORD str_len = usid.size() << 1;
+		std::wstring sid = converter.from_bytes(usid);
+		memcpy(payload_one + offset, sid.c_str(), str_len);
+		offset += str_len;
+
+		wchar_t tmp[] = L"/?";
+		memcpy(payload_one + offset, tmp, 4);
+		offset += 4;
+
+		str_len = guid.size() << 1;
+		std::wstring machineGuid = converter.from_bytes(guid);
+		memcpy(payload_one + offset, machineGuid.c_str(), str_len);
+		offset += str_len;
+
+		// calculate MD5
+		std::string md5_payload_one = SSLHelper::md5(payload_one, offset);
+
+		DWORD* ptr = (DWORD*)md5_payload_one.c_str();
+		DWORD a = *ptr;
+		DWORD b = *(ptr + 1);
+
+		QWORD mhashbs = _360Hash((DWORD*)payload_one, offset, a, b);
+
+		// step 3 urls encode
+		std::string encode = SSLHelper::Base64Encode((char*)&mhashbs, 8);
+		DWORD dwMhash_encbs = encode.size();
+		std::unique_ptr<BYTE[]>mhash_encbs(new BYTE[dwMhash_encbs * 2]);
+
+		UrlEncode((PBYTE)(char*)encode.c_str(), dwMhash_encbs, mhash_encbs.get(), dwMhash_encbs);
+
+		// step 4 concatenate payload-two
+		std::unique_ptr<BYTE[]>payload_two(new BYTE[1024]);
+		DWORD magic_number = 1;
+
+		memcpy(payload_two.get(), &magic_number, 4);
+		offset = 4;
+		memcpy(payload_two.get() + offset, &stub_len, 4);
+		offset += 4;
+
+		memcpy(payload_two.get() + offset, stub, stub_len);
+		offset += stub_len;
+
+		magic_number = 2;
+		memcpy(payload_two.get() + offset, &magic_number, 4);
+		offset += 4;
+
+		memcpy(payload_two.get() + offset, &dwMhash_encbs, 4);
+		offset += 4;
+
+		memcpy(payload_two.get() + offset, mhash_encbs.get(), dwMhash_encbs);
+		offset += dwMhash_encbs;
+
+		// step 5 rand enc
+		std::unique_ptr<BYTE[]>randenc_bs(new BYTE[offset + 8]);
+		RandEnc(payload_two.get(), offset, randenc_bs.get());
+
+		std::string tmp_bs = SSLHelper::md5(randenc_bs.get(), offset + 4);
+		std::string binascii_tmp_bs = SSLHelper::EncodeHex(tmp_bs, 16);
+
+		// step 6 Tea 360
+		std::unique_ptr<BYTE[]>tea360(new BYTE[192]);
+		// x923 padding 0
+		memset(tea360.get(), 0, 192);
+		Tea360((PBYTE)binascii_tmp_bs.c_str(), 32, tea360.get());
+
+		// step 7
+		std::string key_bs = SSLHelper::md5(tea360.get(), 192);
+		return SSLHelper::EncodeHex(key_bs, 16);
+	}
+
 	bool Init(LPWSTR filePath, LPWSTR savePath, std::string sid, std::string guid) {
 		if (sid == "" || guid == "") {
 			return false;
@@ -174,7 +257,7 @@ public:
 	}
 
 	bool Get360BookMarkByFile() {
-		std::string key = GetBookMarkKey();
+		std::string key = GetKey(m_sid, m_machineGuid);
 		HANDLE m_hBookMark = ::CreateFileW(m_filePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 			NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -221,7 +304,7 @@ public:
 	}
 
 	bool Get360BookMarkByMemory() {
-		std::string key = GetBookMarkKey();
+		std::string key = GetKey(m_sid, m_machineGuid);
 		std::string iv = "33mhsq0uwgzblwdo";
 		std::string bookmarks = "";
 		int dwDecode = m_dwMemoryBuffer;
@@ -261,27 +344,27 @@ public:
 
 private:
 	// Cryptographic
-	inline DWORD _ZIMU(DWORD d1, DWORD d2) noexcept {
+	static inline DWORD _ZIMU(DWORD d1, DWORD d2) noexcept {
 		return d1 * d2;
 	}
 
-	inline DWORD _ZOO3(DWORD d1, DWORD d2) noexcept {
+	static inline DWORD _ZOO3(DWORD d1, DWORD d2) noexcept {
 		return _ZIMU(d2, d1 >> 16);
 	}
 
-	inline DWORD _ZOO1(DWORD d1, DWORD d2, DWORD d3) noexcept {
+	static inline DWORD _ZOO1(DWORD d1, DWORD d2, DWORD d3) noexcept {
 		return _ZIMU(d2, d1) - _ZOO3(d1, d3);
 	}
 
-	inline DWORD _ZOO2(DWORD d1, DWORD d2, DWORD d3) noexcept {
+	static inline DWORD _ZOO2(DWORD d1, DWORD d2, DWORD d3) noexcept {
 		return _ZIMU(d2, d1) + _ZOO3(d1, d3);
 	}
 
-	inline DWORD Rand(DWORD seed) noexcept {
+	static inline DWORD Rand(DWORD seed) noexcept {
 		return 0x343fd * seed + 0x269ec3;
 	}
 
-	QWORD CS64_WordSwap(CONST DWORD* src, DWORD iChNum, DWORD iMd51, DWORD iMd52) {
+	static QWORD CS64_WordSwap(CONST DWORD* src, DWORD iChNum, DWORD iMd51, DWORD iMd52) {
 		DWORD dwMD50 = (iMd51 | 1) + 0x69FB0000;
 		DWORD dwMD51 = (iMd52 | 1) + 0x13DB0000;
 
@@ -325,7 +408,7 @@ private:
 		return res;
 	}
 
-	QWORD CS64_Reversible(CONST DWORD* src, DWORD iChNum, DWORD iMd51, DWORD iMd52) {
+	static QWORD CS64_Reversible(CONST DWORD* src, DWORD iChNum, DWORD iMd51, DWORD iMd52) {
 		DWORD dwMD50 = iMd51 | 1;
 		DWORD dwMD51 = iMd52 | 1;
 
@@ -369,7 +452,7 @@ private:
 		return res;
 	}
 
-	QWORD _360Hash(CONST DWORD* src, DWORD dwWsLen, DWORD iMd51, DWORD iMd52) {
+	static QWORD _360Hash(CONST DWORD* src, DWORD dwWsLen, DWORD iMd51, DWORD iMd52) {
 		DWORD dwCount = dwWsLen >> 2;
 		if (dwCount & 1)
 			--dwCount;
@@ -378,7 +461,7 @@ private:
 		return r1 ^ r2;
 	}
 
-	void UrlEncode(CONST PBYTE data, DWORD szLen, CONST PBYTE dataOut, DWORD& szOutLen) {
+	static void UrlEncode(CONST PBYTE data, DWORD szLen, CONST PBYTE dataOut, DWORD& szOutLen) {
 		// "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-.:/"
 		DWORD out = 0;
 		szOutLen = szLen;
@@ -413,7 +496,7 @@ private:
 		return;
 	}
 
-	void RandEnc(PBYTE data, DWORD size, CONST PBYTE dataOut, DWORD mseed = 0x8000402b) {
+	static void RandEnc(PBYTE data, DWORD size, CONST PBYTE dataOut, DWORD mseed = 0x8000402b) {
 		DWORD out = 0;
 		*((DWORD*)dataOut) = mseed;
 		out += 4;
@@ -443,7 +526,7 @@ private:
 		return;
 	}
 
-	void TeaEncrypt(PBYTE iv, PBYTE key, CONST PBYTE dataOut) {
+	static void TeaEncrypt(PBYTE iv, PBYTE key, CONST PBYTE dataOut) {
 		DWORD out = 0;
 		DWORD seed = 0x9e3779b9;
 		DWORD v4 = *(DWORD*)iv;
@@ -464,7 +547,7 @@ private:
 		return;
 	}
 
-	bool Tea360(PBYTE pbData, DWORD szpbData, CONST PBYTE out, DWORD size = 0x80) {
+	static bool Tea360(PBYTE pbData, DWORD szpbData, CONST PBYTE out, DWORD size = 0x80) {
 		std::unique_ptr<BYTE[]>data(new BYTE[size]);
 		memcpy(data.get(), pbData, szpbData);
 		if (size > szpbData) {
@@ -478,85 +561,6 @@ private:
 			TeaEncrypt(data.get() + i * 8, keys, out + i * 8);
 		}
 		return true;
-	}
-
-	std::string GetBookMarkKey() {
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-		// step 1 padding stub
-		DWORD stub_len = sizeof(stub);
-		// step 2 concatenate payload one
-		BYTE payload_one[512] = { 0 };
-		memcpy(payload_one, stub, stub_len);
-
-		DWORD offset = stub_len;
-		DWORD str_len = m_sid.size() << 1;
-		std::wstring sid = converter.from_bytes(m_sid);
-		memcpy(payload_one + offset, sid.c_str(), str_len);
-		offset += str_len;
-
-		wchar_t tmp[] = L"/?";
-		memcpy(payload_one + offset, tmp, 4);
-		offset += 4;
-
-		str_len = m_machineGuid.size() << 1;
-		std::wstring machineGuid = converter.from_bytes(m_machineGuid);
-		memcpy(payload_one + offset, machineGuid.c_str(), str_len);
-		offset += str_len;
-
-		// calculate MD5
-		std::string md5_payload_one = SSLHelper::md5(payload_one, offset);
-
-		DWORD* ptr = (DWORD*)md5_payload_one.c_str();
-		DWORD a = *ptr;
-		DWORD b = *(ptr + 1);
-
-		QWORD mhashbs = _360Hash((DWORD*)payload_one, offset, a, b);
-
-		// step 3 urls encode
-		std::string encode = SSLHelper::Base64Encode((char *)&mhashbs, 8);
-		DWORD dwMhash_encbs = encode.size();
-		std::unique_ptr<BYTE[]>mhash_encbs(new BYTE[dwMhash_encbs * 2]);
-
-		UrlEncode((PBYTE)(char*)encode.c_str(), dwMhash_encbs, mhash_encbs.get(), dwMhash_encbs);
-
-		// step 4 concatenate payload-two
-		std::unique_ptr<BYTE[]>payload_two(new BYTE[1024]);
-		DWORD magic_number = 1;
-
-		memcpy(payload_two.get(), &magic_number, 4);
-		offset = 4;
-		memcpy(payload_two.get() + offset, &stub_len, 4);
-		offset += 4;
-
-		memcpy(payload_two.get() + offset, stub, stub_len);
-		offset += stub_len;
-
-		magic_number = 2;
-		memcpy(payload_two.get() + offset, &magic_number, 4);
-		offset += 4;
-
-		memcpy(payload_two.get() + offset, &dwMhash_encbs, 4);
-		offset += 4;
-
-		memcpy(payload_two.get() + offset, mhash_encbs.get(), dwMhash_encbs);
-		offset += dwMhash_encbs;
-
-		// step 5 rand enc
-		std::unique_ptr<BYTE[]>randenc_bs(new BYTE[offset + 8]);
-		RandEnc(payload_two.get(), offset, randenc_bs.get());
-
-		std::string tmp_bs = SSLHelper::md5(randenc_bs.get(), offset + 4);
-		std::string binascii_tmp_bs = SSLHelper::EncodeHex(tmp_bs, 16);
-
-		// step 6 Tea 360
-		std::unique_ptr<BYTE[]>tea360(new BYTE[192]);
-		// x923 padding 0
-		memset(tea360.get(), 0, 192);
-		Tea360((PBYTE)binascii_tmp_bs.c_str(), 32, tea360.get());
-
-		// step 7
-		std::string key_bs = SSLHelper::md5(tea360.get(), 192);
-		return SSLHelper::EncodeHex(key_bs, 16);
 	}
 
 	private:
@@ -584,14 +588,27 @@ public:
 	explicit Wrapper(std::string domain, std::string account, std::string enc_password) noexcept {
 		this->m_domain = domain;
 		this->m_account = account;
-		this->enc_password = enc_password;
+		this->m_encPassword = enc_password;
+	}
+
+	std::string GetDomain() const noexcept {
+		return m_domain;
+	}
+	
+	std::string GetAccount()const noexcept {
+		return m_account;
+	}
+
+	std::string GetPassword()const noexcept {
+		return m_encPassword;
 	}
 
 	~Wrapper() {}
+
 private:
 	std::string m_domain;
 	std::string m_account;
-	std::string enc_password;
+	std::string m_encPassword;
 };
 
 class SafeBrowserAutoSave {
@@ -689,4 +706,112 @@ private:
 private:
 	std::wstring m_dbPath;
 	std::string m_guid;
+};
+
+
+/*
+* 360 safe browser history
+* user data is stored at
+* C:/Users/Administrator/AppData/Roaming/360se6/User Data/Default/360History
+* This is encrypted db
+* which key is same as the bookmark!!!
+*/
+
+class History {
+
+public:
+	explicit History() noexcept {}
+
+	explicit History(const char* url, const char* title, const char* accessTime) {
+		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+		m_url = std::string(url);
+		m_title = converter.from_bytes(title);
+		m_lastAccessTime = std::string(accessTime);
+	}
+
+	std::string GetUrl()const noexcept {
+		return m_url;
+	}
+
+	std::wstring GetTitle()const noexcept {
+		return m_title;
+	}
+
+	std::string GetLastAccessTime()const noexcept {
+		return m_lastAccessTime;
+	}
+
+	~History() = default;
+
+private:
+	std::string m_url;
+	std::wstring m_title;
+	std::string m_lastAccessTime;
+};
+
+class SafeBrowserHistory {
+
+public:
+
+	bool Init(LPWSTR dbfilePath, std::string key, std::vector<History>& res) noexcept {
+		if (dbfilePath == NULL) {
+			return false;
+		}
+		if (key == "") {
+			return false;
+		}
+		m_key = key;
+		sqlite3* db = NULL;
+		int status = SQLITE_OK;
+		do {
+			status = sqlite3_open16(dbfilePath, &db);
+			if (status != SQLITE_OK) {
+				break;
+			}
+			status = sqlite3_key(db, m_key.c_str(), m_key.size());
+			if (status != SQLITE_OK) {
+				break;
+			}
+			// get table: select name from sqlite_master where type='table' order by name;
+			// get column: PRAGMA table_info([urls]);
+			// get info: select url, title,visit_count,last_visit_time from urls
+			sqlite3_stmt* stat = NULL;
+			const wchar_t* szSql = L"select url,title,datetime(last_visit_time/1000000-11644473600,'unixepoch','localtime') from urls where visit_count > 0";
+			status = sqlite3_prepare16(db, szSql, lstrlenW(szSql) * 2, &stat, 0);
+			if (status != SQLITE_OK) {
+				break;
+			}
+			while (SQLITE_ROW == sqlite3_step(stat)) {
+				res.push_back(History((const char *)sqlite3_column_text(stat, 0),
+							          (const char *)sqlite3_column_text(stat, 1),
+									  (const char *)sqlite3_column_text(stat, 2)));
+			}
+
+		} while (false);
+		return status == SQLITE_OK;
+	}
+
+	void Uint() noexcept {
+		m_dbPath = L"";
+		m_key = "";
+	}
+
+	static void GetInfoFromSQL(LPWSTR dbfilePath, std::string key, std::vector<History>& res) {
+		SafeBrowserHistory his;
+		his.Init(dbfilePath, key, res);
+		his.Uint();
+	}
+
+	explicit SafeBrowserHistory() {
+		m_dbPath = L"";
+		m_key = "";
+	}
+
+	~SafeBrowserHistory() {
+		Uint();
+	}
+
+private:
+	std::wstring m_dbPath;
+	std::string m_key;
 };

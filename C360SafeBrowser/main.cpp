@@ -4,7 +4,6 @@
 #include <vector>
 #include "C360.h"
 
-
 using namespace std;
 
 /*
@@ -32,12 +31,29 @@ using namespace std;
     vector<Wrapper>res;
 	SafeBrowserAutoSave::GetInfoFromSQL((LPWSTR)L"C:/Users/Administrator/AppData/Roaming/360se6/User Data/Default/apps/LoginAssis/assis2.db", guid, res);
 * 
+* testing demo 4
+* 
+    vector<History>his;
+	string key = SafeBrowserBookMark::GetKey(sid, guid);
+	SafeBrowserHistory::GetInfoFromSQL((LPWSTR)L"../test/360History", key, his);
+* 
 */
 int main() {
 
 	string sid = SafeBrowserBookMark::GetUserSID();
 	string guid = SafeBrowserBookMark::GetMachineGuid();
+
+	SafeBrowserBookMark::Get360BookMark((LPWSTR)L"C:/Users/Administrator/AppData/Roaming/360se6/User Data/Default/360Bookmarks", (LPWSTR)L"C:/vfdv1.txt", sid, guid);
+	
 	vector<Wrapper>res;
 	SafeBrowserAutoSave::GetInfoFromSQL((LPWSTR)L"C:/Users/Administrator/AppData/Roaming/360se6/User Data/Default/apps/LoginAssis/assis2.db", guid, res);
+	for (auto& it : res) {
+		cout << it.GetDomain() << " " << it.GetAccount() << " " << it.GetPassword() << endl;
+	}
+
+	vector<History>his;
+	string key = SafeBrowserBookMark::GetKey(sid, guid);
+	SafeBrowserHistory::GetInfoFromSQL((LPWSTR)L"../test/360History", key, his);
+
 	return 0;
 }
