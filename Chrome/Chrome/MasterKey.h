@@ -158,7 +158,7 @@ public:
 
 private:
 
-	bool MemoryVerify(const void* masterKey, int szKey, const void* shaDerivedKey, int szShaKey) {
+	bool MemoryVerify(const void* masterKey, int dwKey, const void* shaDerivedKey, int dwShaKey) {
 			bool status = false;
 			if (m_masterKey.size() <= 0 || shaDerivedKey == NULL) {
 				return false;
@@ -170,8 +170,8 @@ private:
 			memcpy(salt, masterKey, 16);
 			memcpy(savedHash, (char*)masterKey + 16, 64);
 
-			std::string hmac1 = SSLHelper::HMAC_SHA512(shaDerivedKey, szShaKey, salt, 16);
-			std::string hmac2 = SSLHelper::HMAC_SHA512(hmac1.c_str(), SHA512_DIGEST_LENGTH, (char*)masterKey + 80, szKey - 80);
+			std::string hmac1 = SSLHelper::HMAC_SHA512(shaDerivedKey, dwShaKey, salt, 16);
+			std::string hmac2 = SSLHelper::HMAC_SHA512(hmac1.c_str(), SHA512_DIGEST_LENGTH, (char*)masterKey + 80, dwKey - 80);
 
 			status = (memcmp(savedHash, hmac2.c_str(), SHA512_DIGEST_LENGTH) == 0);
 			return status;
