@@ -37,4 +37,5 @@ Release/
 x64/
 .vscode/
 *.filters
+*.user
 test/
