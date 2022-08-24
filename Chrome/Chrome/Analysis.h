@@ -27,7 +27,7 @@
 * user cookie info is stored at
 * C:/Users/%username%/AppData/Local/Google/Chrome/User Data/Default/Network/Cookies
 * Luckily, both are sqlite3 database(db) file!
-* login password and cookie are encrypted, others are plain text
+* login password and cookie are encrypted, others(History[db file] and bookmarks[json file]) are plain text
 * Luckily, they are encrypted by the same key!
 */
 
