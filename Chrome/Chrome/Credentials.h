@@ -135,19 +135,19 @@ public:
 		return flag;
 	}
 
-	bool Decrypt(const void * key, int szKey) {
+	bool Decrypt(const void * key, int dwKey) {
 		bool flag = false;
 		char iv[16] = { 0 };
 		do {
-			std::string sha1Key = SSLHelper::sha1(key, szKey);
+			std::string sha1Key = SSLHelper::sha1(key, dwKey);
 			std::string outKey = SSLHelper::HMAC_SHA512(sha1Key.c_str(), SHA_DIGEST_LENGTH, m_salt.data(), m_salt.size());
-			int szOutKey = m_dwAlgCryptLen >> 3;
-			if (szOutKey > SHA512_DIGEST_LENGTH) {
+			int dwOutKey = m_dwAlgCryptLen >> 3;
+			if (dwOutKey > SHA512_DIGEST_LENGTH) {
 				break;
 			}
-			outKey = outKey.substr(0, szOutKey);
+			outKey = outKey.substr(0, dwOutKey);
 			// Decrypt
-			std::string plain = SSLHelper::AesCBCDecrypt(m_encBlob.data(), m_encBlob.size(), outKey.c_str(), szOutKey, iv);
+			std::string plain = SSLHelper::AesCBCDecrypt(m_encBlob.data(), m_encBlob.size(), outKey.c_str(), dwOutKey, iv);
 			if (plain == "") {
 				break;
 			}

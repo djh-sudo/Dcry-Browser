@@ -65,19 +65,21 @@ class MasterKey {
 
 public:
 
-	bool Decrypt(const void * memory, int szMemory) {
+	bool Decrypt(const void * memory, int dwMemory) {
 		bool status = false;
 		P_DPAPI_MASTERKEYS masterKeys = NULL;
 		P_DPAPI_MASTERKEY masterKey = NULL;
 		do {
-			if (memory == NULL || szMemory <= 0) {
+			if (memory == NULL || dwMemory <= 0) {
 				break;
 			}
 			// setting parameter
 			masterKeys = (P_DPAPI_MASTERKEYS)new BYTE[sizeof(DPAPI_MASTERKEYS) + 1];
 			memset(masterKeys, 0, sizeof(DPAPI_MASTERKEYS) + 1);
 			memcpy(masterKeys, (char *)memory, sizeof(DPAPI_MASTERKEYS));
-
+			if (masterKeys->dwMasterKeyLen > dwMemory) {
+				break;
+			}
 			masterKey = (P_DPAPI_MASTERKEY)new char[masterKeys->dwMasterKeyLen + 1];
 			memset(masterKey, 0, masterKeys->dwMasterKeyLen + 1);
 			memcpy(masterKey, (char *)memory + FIELD_OFFSET(DPAPI_MASTERKEYS, MasterKey), masterKeys->dwMasterKeyLen);
@@ -85,12 +87,12 @@ public:
 			memcpy(m_salt, masterKey->salt, 16);
 			m_iterations = masterKey->rounds;
 
-			int szMasterKey = masterKeys->dwMasterKeyLen - FIELD_OFFSET(DPAPI_MASTERKEY, pbKey);
-			if (szMasterKey < 80) {
+			int dwMasterKey = masterKeys->dwMasterKeyLen - FIELD_OFFSET(DPAPI_MASTERKEY, pbKey);
+			if (dwMasterKey < 80 || dwMasterKey >= dwMemory) {
 				break;
 			}
-			m_masterKey.resize(szMasterKey);
-			memcpy(m_masterKey.data(), masterKey->pbKey, szMasterKey);
+			m_masterKey.resize(dwMasterKey);
+			memcpy(m_masterKey.data(), masterKey->pbKey, dwMasterKey);
 			// decrypt master key
 			std::string passHash = SSLHelper::sha1(m_password.data(), m_password.size());
 			std::string sha1DerivedKey = SSLHelper::HMAC_SHA1(passHash.c_str(), SHA_DIGEST_LENGTH, m_sid.data(), m_sid.size());
@@ -102,14 +104,14 @@ public:
 			std::string key = HMACHash.substr(0, 32);
 			std::string iv = HMACHash.substr(32, 16);
 
-			std::string plain = SSLHelper::AesCBCDecrypt(m_masterKey.data(), szMasterKey, key.c_str(), 32, iv.c_str());
+			std::string plain = SSLHelper::AesCBCDecrypt(m_masterKey.data(), dwMasterKey, key.c_str(), 32, iv.c_str());
 			if (plain == "") {
 				break;
 			}
-			status = MemoryVerify(plain.c_str(), szMasterKey, sha1DerivedKey.c_str(), 20);
+			status = MemoryVerify(plain.c_str(), dwMasterKey, sha1DerivedKey.c_str(), 20);
 			if (status == true) {
-				m_plainMasterKey.resize(szMasterKey - 80);
-				memcpy(m_plainMasterKey.data(), plain.c_str() + 80, szMasterKey - 80);
+				m_plainMasterKey.resize(dwMasterKey - 80);
+				memcpy(m_plainMasterKey.data(), plain.c_str() + 80, dwMasterKey - 80);
 			}
 		} while (false);
 
