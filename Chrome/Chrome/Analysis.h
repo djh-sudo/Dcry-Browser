@@ -246,6 +246,15 @@ public:
 		m_keySize = 0;
 	}
 
+	explicit Chrome() {
+		m_keySize = 0;
+		m_decryptKey.clear();
+	}
+
+	~Chrome() {
+		Uint();
+	}
+
 private:
 
 	std::string DecryptInfo(std::string & info) {
