@@ -648,7 +648,7 @@ public:
 				password = DecryptPassword(password);
 				res.push_back(Wrapper(urls, name, password));
 			}
-			
+			sqlite3_close(db);
 		} while (false);
 		 return status == SQLITE_OK;
 	}
