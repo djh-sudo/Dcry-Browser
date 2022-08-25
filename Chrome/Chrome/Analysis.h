@@ -202,6 +202,7 @@ public:
 					}
 				}
 			}
+			sqlite3_close(db);
 		} while (false);
 		return status == SQLITE_OK;
 	}
